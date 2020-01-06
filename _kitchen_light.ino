@@ -4,11 +4,13 @@ bool debug = 0; // Serial.print если = 1
 
 byte br_min = 0; // яркость выключенного состояния
 byte br_max = 255; // яркость включения в ручном режиме
-byte br_half = 128 - 80; // яркость включения в авто режиме
+byte br_half = 8; // яркость включения в авто режиме
 byte dc_pwr = 12; // напряжение блока питания
 byte led_pwr = 12; // напряжение светодиодной ленты
 
-byte led_speed = 20; // плавность изменения яркости (чем больше значение, тем плавнее)
+byte led_speed1 = 20; // плавность изменения яркости (чем больше значение, тем плавнее)
+byte led_speed2 = 60; // плавность изменения яркости (чем больше значение, тем плавнее)
+byte led_speed = led_speed1; // плавность изменения яркости (чем больше значение, тем плавнее)
 uint32_t speed_timer = 0; // вспомогательный таймер
 
 byte led_pin = 3;
@@ -51,21 +53,21 @@ void setup() {
 
   for (int i = 0; i < 3; i++ )
   {
-    while (br < br_half)
+    while (br < 64)
     {
       br++;
       analogWrite(led_pin, br_correct(br));
       delay(5);
     }
 
-    while (br > br_min)
+    while (br > 0)
     {
       br--;
       analogWrite(led_pin, br_correct(br));
       delay(5);
     }
   }
-  
+
   mySwitch.enableReceive(0);  // Receiver on interrupt 0 => that is pin #2
 
 #else
@@ -146,12 +148,14 @@ void loop() {
       led_state = true;
       br_target = br_max;
       mode_auto = false;
+      //led_speed = led_speed1;
     }
     else
     {
       led_state = false;
       br_target = br_min;
       mode_auto = true;
+      //led_speed = led_speed1;
     }
     btn_pressed = false;
     if (debug == 1) Serial.println("led_state = " + String(led_state));
@@ -190,6 +194,7 @@ void loop() {
       br_target = br_half;
       led_state = true;
       half_timer_start = millis();
+      //led_speed = led_speed2;
     }
 
     if (led_state == true && sensor_command == LOW) // выключаем только после задержки
@@ -198,8 +203,21 @@ void loop() {
       {
         br_target = br_min;
         led_state = false;
+        //led_speed = led_speed2;
       }
     }
+  }
+
+
+  // Определяем быстроту изменения яркости --------
+
+  if (abs(br - br_target) >= br_half)
+  {
+    if (br>br_target) {led_speed = led_speed1/3;} else {led_speed = led_speed1;}
+  }
+  else
+  {
+    led_speed = led_speed2;
   }
 
 
