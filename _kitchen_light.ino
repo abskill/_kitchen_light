@@ -5,22 +5,28 @@ bool debug = 0; // Serial.print если = 1
 byte br_min = 0; // яркость выключенного состояния
 byte br_max = 255; // яркость включения в ручном режиме
 byte br_half = 8; // яркость включения в авто режиме
-byte dc_pwr = 12; // напряжение блока питания
-byte led_pwr = 12; // напряжение светодиодной ленты
+byte dc_pwr = 9; // напряжение блока питания
+byte main_led_pwr = 9; // напряжение светодиодной ленты
+byte second_led_pwr = 5; // напряжение светодиодной ленты
 
 byte led_speed1 = 20; // плавность изменения яркости (чем больше значение, тем плавнее)
 byte led_speed2 = 60; // плавность изменения яркости (чем больше значение, тем плавнее)
 byte led_speed = led_speed1; // плавность изменения яркости (чем больше значение, тем плавнее)
 uint32_t speed_timer = 0; // вспомогательный таймер
 
-byte led_pin = 3;
-byte sensor_pin = 4;
+byte main_led_pin = 3; // пин управления основной лентой
+byte second_led_pin = 6; // пин управления дополнительной лентой
+byte sensor_pin = 4; // пин к датчику движения
+byte light_pin = 5; // пин к датчику света
 
 bool cir = 0; // используется в тестовом режиме
 
 byte br = 0;  // текущая яркость
 byte br_target = 0; // назначенная яркость
 bool led_state = false; // статус ленты (вкл/выкл)
+
+byte br2 = 0;  // текущая яркость
+byte br2_target = 0; // назначенная яркость
 
 bool btn_pressed = false; // признак нажатия кнопки
 bool mode_auto = true; // режим автоматического управления с датчика движения
@@ -29,6 +35,7 @@ uint32_t btn_timer = 0; // вспомогательный таймер
 uint32_t btn_delay = 500; // после нажатия на кнопку ее обработка блокируется на это количество миллисекунд
 int btn_value = 0; // значение кода кнопки
 
+bool light_level = 0; // уровень освещенности с датчика света
 bool sensor_command = 0; // команда с датчика движения
 uint32_t half_timer_start = 0; // вспомогательный таймер
 uint32_t half_delay_on = 10000; // время непрерывного отсутствия команды от датчика движения (мс)
@@ -44,9 +51,11 @@ void setup() {
   // initialize serial communication at 9600 bits per second:
   if (debug == 1)  Serial.begin(9600);
 
-  pinMode(led_pin, OUTPUT);
+  pinMode(main_led_pin, OUTPUT);
+  pinMode(second_led_pin, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(sensor_pin, INPUT);
+  pinMode(light_pin, INPUT);
 
 #ifndef TEST
   if (debug == 1)Serial.println("test mode is off");
@@ -56,14 +65,16 @@ void setup() {
     while (br < 64)
     {
       br++;
-      analogWrite(led_pin, br_correct(br));
+      analogWrite(main_led_pin, br_correct(br));
+      analogWrite(second_led_pin, br);
       delay(5);
     }
 
     while (br > 0)
     {
       br--;
-      analogWrite(led_pin, br_correct(br));
+      analogWrite(main_led_pin, br_correct(br));
+      analogWrite(second_led_pin, br);
       delay(5);
     }
   }
@@ -85,7 +96,7 @@ void loop() {
 
     while (br < br_max) {
       br++;
-      analogWrite(led_pin, br_correct(br));
+      analogWrite(main_led_pin, br_correct(br));
       delay(10);
     }
   }
@@ -94,7 +105,7 @@ void loop() {
 
     while (br > br_min) {
       br--;
-      analogWrite(led_pin, br_correct(br));
+      analogWrite(main_led_pin, br_correct(br));
       delay(10);
     }
   }
@@ -188,22 +199,33 @@ void loop() {
   if (mode_auto == true)
   {
     sensor_command = digitalRead(sensor_pin);
+    light_level = digitalRead(light_pin);
 
-    if (sensor_command == HIGH) // включаем сразу
+    if (sensor_command == true)  // включаем
     {
-      br_target = br_half;
-      led_state = true;
-      half_timer_start = millis();
-      //led_speed = led_speed2;
+      br2_target = br_max;
+
+      if (light_level == true) // если в комнате темно
+      {
+        br_target = br_half;
+        led_state = true;
+        half_timer_start = millis();
+      }
     }
 
-    if (led_state == true && sensor_command == LOW) // выключаем только после задержки
+    if (sensor_command == LOW) // выключаем только после задержки
     {
-      if (millis() - half_timer_start > half_delay_on)
+
+      if (led_state == true && (millis() - half_timer_start > half_delay_on))
       {
         br_target = br_min;
         led_state = false;
-        //led_speed = led_speed2;
+      }
+
+      if (millis() - half_timer_start > half_delay_on * 1.2)
+      {
+        br2_target = br_min;
+        //led_speed = led_speed1;
       }
     }
   }
@@ -213,11 +235,21 @@ void loop() {
 
   if (abs(br - br_target) >= br_half)
   {
-    if (br>br_target) {led_speed = led_speed1/3;} else {led_speed = led_speed1;}
+    if (br > br_target) {
+      led_speed = led_speed1 / 3;
+    } else {
+      led_speed = led_speed1;
+    }
   }
   else
   {
-    led_speed = led_speed2;
+    //    led_speed = led_speed2;
+    if (br > br_target) {
+      led_speed = led_speed2 / 2;
+    } else {
+      led_speed = led_speed2;
+    }
+
   }
 
 
@@ -226,7 +258,12 @@ void loop() {
   if (millis() - speed_timer >= led_speed)
   {
     speed_timer = millis();
-    analogWrite(led_pin, br_correct(change_br()));
+
+    br = change_br(br, br_target);
+    analogWrite(main_led_pin, br_correct(br));
+
+    br2 = change_br(br2, br2_target);
+    analogWrite(second_led_pin, br2);
   }
 
   if (led_state == 0) digitalWrite(LED_BUILTIN, LOW);
@@ -245,7 +282,7 @@ byte br_correct (byte val) // конвертирует значение ярко
   //map(val, 0, 255, 0, 255);
   //map(val, 0, dc_pwr, 0, dc_pwr);
   constrain(val, br_min, br_max);
-  val = val * led_pwr / dc_pwr;
+  val = val * main_led_pwr / dc_pwr;
   //constrain(val, 0, 255);
   //if (debug == 1) Serial.println("br_correct = " + String(val));
   return (val);
@@ -253,10 +290,10 @@ byte br_correct (byte val) // конвертирует значение ярко
 
 
 
-byte change_br()
+byte change_br(byte brightness, byte brightness_target)
 {
-  if (br < br_target) br++;
-  if (br > br_target) br--;
-  //if (debug == 1) Serial.println("change_br = " + String(br));
-  return (br);
+  if (brightness < brightness_target) brightness++;
+  if (brightness > brightness_target) brightness--;
+  if (debug == 1) Serial.println("change_br = " + String(brightness));
+  return (brightness);
 }
