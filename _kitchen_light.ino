@@ -14,6 +14,9 @@ byte led_speed2 = 60; // плавность изменения яркости (�
 byte led_speed = led_speed1; // плавность изменения яркости (чем больше значение, тем плавнее)
 uint32_t speed_timer = 0; // вспомогательный таймер
 
+byte second_led_speed = 20; // плавность изменения яркости (чем больше значение, тем плавнее)
+uint32_t speed_timer2 = 0; // вспомогательный таймер
+
 byte main_led_pin = 3; // пин управления основной лентой
 byte second_led_pin = 6; // пин управления дополнительной лентой
 byte sensor_pin = 4; // пин к датчику движения
@@ -204,19 +207,19 @@ void loop() {
     if (sensor_command == true)  // включаем
     {
       br2_target = br_max;
+      half_timer_start = millis();
 
       if (light_level == true) // если в комнате темно
       {
         br_target = br_half;
         led_state = true;
-        half_timer_start = millis();
       }
     }
 
     if (sensor_command == LOW) // выключаем только после задержки
     {
 
-      if (led_state == true && (millis() - half_timer_start > half_delay_on))
+      if (millis() - half_timer_start > half_delay_on)
       {
         br_target = br_min;
         //br2_target = br_min;
@@ -264,10 +267,22 @@ void loop() {
     br = change_br(br, br_target);
     analogWrite(main_led_pin, br); //br_correct(br));
 
+   // br2 = change_br(br2, br2_target);
+   // analogWrite(second_led_pin, br2);
+  }
+
+  if (millis() - speed_timer2 >= second_led_speed)
+  {
+    speed_timer2 = millis();
+
+    //br = change_br(br, br_target);
+    //analogWrite(main_led_pin, br); //br_correct(br));
+
     br2 = change_br(br2, br2_target);
     analogWrite(second_led_pin, br2);
   }
 
+  
   if (led_state == 0) digitalWrite(LED_BUILTIN, LOW);
   else digitalWrite(LED_BUILTIN, HIGH);
 
