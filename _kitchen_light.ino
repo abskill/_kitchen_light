@@ -5,9 +5,9 @@ bool debug = 0; // Serial.print если = 1
 byte br_min = 0; // яркость выключенного состояния
 byte br_max = 255; // яркость включения в ручном режиме
 byte br_half = 8; // яркость включения в авто режиме
-byte dc_pwr = 9; // напряжение блока питания
-byte main_led_pwr = 9; // напряжение светодиодной ленты
-byte second_led_pwr = 5; // напряжение светодиодной ленты
+//byte dc_pwr = 9; // напряжение блока питания
+//byte main_led_pwr = 9; // напряжение светодиодной ленты
+//byte second_led_pwr = 5; // напряжение светодиодной ленты
 
 byte led_speed1 = 20; // плавность изменения яркости (чем больше значение, тем плавнее)
 byte led_speed2 = 60; // плавность изменения яркости (чем больше значение, тем плавнее)
@@ -65,16 +65,16 @@ void setup() {
     while (br < 64)
     {
       br++;
-      analogWrite(main_led_pin, br_correct(br));
-      analogWrite(second_led_pin, br);
+      analogWrite(main_led_pin, br); //br_correct(br));
+      analogWrite(second_led_pin, 64 - br);
       delay(5);
     }
 
     while (br > 0)
     {
       br--;
-      analogWrite(main_led_pin, br_correct(br));
-      analogWrite(second_led_pin, br);
+      analogWrite(main_led_pin, br); //br_correct(br));
+      analogWrite(second_led_pin, 64 - br);
       delay(5);
     }
   }
@@ -96,7 +96,7 @@ void loop() {
 
     while (br < br_max) {
       br++;
-      analogWrite(main_led_pin, br_correct(br));
+      analogWrite(main_led_pin, br); //br_correct(br));
       delay(10);
     }
   }
@@ -105,7 +105,7 @@ void loop() {
 
     while (br > br_min) {
       br--;
-      analogWrite(main_led_pin, br_correct(br));
+      analogWrite(main_led_pin, br); //br_correct(br));
       delay(10);
     }
   }
@@ -154,19 +154,19 @@ void loop() {
 
   if (btn_pressed)
   {
-    if (led_state == false || br_target == br_half)
+    if (led_state == false || br_target == br_half) // включение
     {
       led_state = true;
       br_target = br_max;
+      br2_target = br_max;
       mode_auto = false;
-      //led_speed = led_speed1;
     }
-    else
+    else // выклюючение
     {
       led_state = false;
       br_target = br_min;
       mode_auto = true;
-      //led_speed = led_speed1;
+      half_timer_start = millis();  // сброс таймера выключения в авторежиме
     }
     btn_pressed = false;
     if (debug == 1) Serial.println("led_state = " + String(led_state));
@@ -219,6 +219,7 @@ void loop() {
       if (led_state == true && (millis() - half_timer_start > half_delay_on))
       {
         br_target = br_min;
+        //br2_target = br_min;
         led_state = false;
       }
 
@@ -227,6 +228,7 @@ void loop() {
         br2_target = br_min;
         //led_speed = led_speed1;
       }
+
     }
   }
 
@@ -260,7 +262,7 @@ void loop() {
     speed_timer = millis();
 
     br = change_br(br, br_target);
-    analogWrite(main_led_pin, br_correct(br));
+    analogWrite(main_led_pin, br); //br_correct(br));
 
     br2 = change_br(br2, br2_target);
     analogWrite(second_led_pin, br2);
@@ -276,9 +278,9 @@ void loop() {
 
 
 // ==========================================================================================
-
-byte br_correct (byte val) // конвертирует значение яркости, когда напряжение блока питания выше напряжения ленты
-{
+/*
+  byte br_correct (byte val) // конвертирует значение яркости, когда напряжение блока питания выше напряжения ленты
+  {
   //map(val, 0, 255, 0, 255);
   //map(val, 0, dc_pwr, 0, dc_pwr);
   constrain(val, br_min, br_max);
@@ -286,8 +288,8 @@ byte br_correct (byte val) // конвертирует значение ярко
   //constrain(val, 0, 255);
   //if (debug == 1) Serial.println("br_correct = " + String(val));
   return (val);
-}
-
+  }
+*/
 
 
 byte change_br(byte brightness, byte brightness_target)
