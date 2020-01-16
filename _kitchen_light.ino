@@ -1,7 +1,7 @@
 
 
 #define nodeMCU; // Закомментировать, если сборка для NANO
-bool debug = 0; // Serial.print если = 1
+bool debug = 1; // Serial.print если = 1
 
 
 #ifndef nodeMCU // условная компиляция для Nano ----------
@@ -21,7 +21,7 @@ int br_max = 255; // яркость включения в ручном режи�
 #else // Условная компиляция для NodeMCU -----------------
 
 bool OTA_on = false;
-bool MQTT_on = false;
+bool MQTT_on = true;
 /*
   #define main_led_pin D1 // пин управления основной лентой
   #define second_led_pin D3 // пин управления дополнительной лентой
@@ -38,14 +38,10 @@ bool MQTT_on = false;
 
 int br_max = 1023; // яркость включения в ручном режиме
 
-//byte led_speed1 = 1; // плавность изменения яркости (чем больше значение, тем плавнее)
-//byte led_speed2 = 100; // плавность изменения яркости (чем больше значение, тем плавнее)
-//byte second_led_speed = 1; // плавность изменения яркости (чем больше значение, тем плавнее)
-
 uint32_t t_min_max = 2000; // время изменения яркости от br_min до br_max (миллисекунды)
 float br_step = 1; // начальное значение шага изменения яркости
 
-uint32_t t2_min_max = 1500; // время изменения яркости от br_min до br_max (миллисекунды)
+uint32_t t2_min_max = 1700; // время изменения яркости от br_min до br_max (миллисекунды)
 float br2_step = 1; // начальное значение шага изменения яркости
 
 
@@ -83,7 +79,8 @@ uint16_t timer_of_trying_to_connect_wf = millis();
 bool wf_is_connected = false;
 bool mqtt_is_connected = false;
 bool wf_stop = false;
-
+//void mqtt_call();
+bool OTA_started = false;
 
 #endif
 
@@ -126,8 +123,8 @@ uint32_t timer_light = 0;  // вспомогательный таймер
 
 bool sensor_command = 0;  // начальное значение команды с датчика движения
 
-uint32_t half_delay_on = 10000;  // время непрерывного отсутствия команды от датчика движения (мс) main_led
-uint32_t half_delay_on2 = 15000;  // время непрерывного отсутствия команды от датчика движения (мс) second_led
+uint32_t half_delay_on = 25000;  // время непрерывного отсутствия команды от датчика движения (мс) main_led
+uint32_t half_delay_on2 = 30000;  // время непрерывного отсутствия команды от датчика движения (мс) second_led
 uint32_t half_timer_start = 0;  // вспомогательный таймер
 
 uint32_t d_time = 0;  // длительность одно цикла (исп-ся для расчета br_step)
@@ -142,6 +139,9 @@ RCSwitch mySwitch = RCSwitch();
 // the setup routine runs once when you press reset:
 
 void setup() {
+
+  // initialize serial communication at 9600 bits per second:
+  if (debug == 1)  Serial.begin(9600);
 
   // устанавливаем режим пинов
   pinMode(main_led_pin, OUTPUT);
@@ -162,27 +162,40 @@ void setup() {
   delay(500);
 
 #ifdef nodeMCU // Условная компиляция для NodeMCU --------
-try_to_connect_wf(wf_is_connected);
-/*
-  // включаем wi-fi
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  while (WiFi.waitForConnectResult() != WL_CONNECTED)
+  // try_to_connect_wf(wf_is_connected);
+  if (debug == 1) Serial.print("try_to_connect_wifi...");
+  WiFi.mode(WIFI_STA);  WiFi.begin(ssid, password);  delay(500);  if (WiFi.waitForConnectResult() != WL_CONNECTED)
   {
-    delay(5000);
-    ESP.restart();
+    if (debug == 1) Serial.println("fail");
+
+    wf_is_connected = false;
+    timer_of_trying_to_connect_wf = millis();
+  }
+  else
+  {
+    if (debug == 1) Serial.println("ok");
+    wf_is_connected = true;
   }
 
-  // подключаем возможность прошивки по воздуху
-  ArduinoOTA.setHostname("ESP8266-00001"); // Задаем имя сетевого порта
-  //ArduinoOTA.setPassword((const char *)"0000"); // Задаем пароль доступа для удаленной прошивки
-  ArduinoOTA.begin(); // Инициализируем OTA
-*/
+  /*
+    // включаем wi-fi
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    while (WiFi.waitForConnectResult() != WL_CONNECTED)
+    {
+    delay(5000);
+    ESP.restart();
+    }
+
+    // подключаем возможность прошивки по воздуху
+    ArduinoOTA.setHostname("ESP8266-00001"); // Задаем имя сетевого порта
+    //ArduinoOTA.setPassword((const char *)"0000"); // Задаем пароль доступа для удаленной прошивки
+    ArduinoOTA.begin(); // Инициализируем OTA
+  */
 #endif // ---------------------------------
 
 
-  // initialize serial communication at 9600 bits per second:
-  if (debug == 1)  Serial.begin(9600);
+
 
 
   // инициализируем приемник rf433
@@ -201,43 +214,57 @@ void loop() {
 
 
 #ifdef nodeMCU
-   if (wf_stop==false) {
-   if (wf_is_connected==false) {
-     if ((millis()-timer_of_trying_to_connect_wf)>delay_of_trying_to_connect_wf) {
-     // try_to_connect_wf(wf_is_connected);
-     WiFi.mode(WIFI_STA);  WiFi.begin(ssid, password);  delay(500);  if (WiFi.waitForConnectResult() != WL_CONNECTED)
-    {
-    wf_is_connected=false;
-    timer_of_trying_to_connect_wf=millis();
-    }
-    else
-    {
-    wf_is_connected=true;
-    }
+  if (wf_stop == false) {
+    if (wf_is_connected == false) {
+      if ((millis() - timer_of_trying_to_connect_wf) > delay_of_trying_to_connect_wf) {
+        // try_to_connect_wf(wf_is_connected);
+        if (debug == 1) Serial.print("try_to_connect_wifi...");
+        WiFi.mode(WIFI_STA);  WiFi.begin(ssid, password);  delay(500);  if (WiFi.waitForConnectResult() != WL_CONNECTED)
+        {
+          if (debug == 1) Serial.println("fail");
+          wf_is_connected = false;
+          timer_of_trying_to_connect_wf = millis();
+        }
+        else
+        {
+          if (debug == 1) Serial.println("ok");
+          wf_is_connected = true;
+        }
       }
-      
-      }
-  
-   if (wf_is_connected==true) {
-   if (MQTT) {
-   mqtt_call();
-   }
- //  mqtt_read(OTA, MQTT) // прием с сервера
-   if (OTA==flase && MQTT==false) {
-    wf_stop=true;
-    STOP_WF()
-   }
-   else {
-    if (OTA) {
-     ArduinoOTA.handle(); // ожидание старта прошивки
+
     }
-   
-    
-   }
+
+    if (wf_is_connected == true) {
+      if (MQTT_on) mqtt_call();
+
+
+      if (OTA_on == false && MQTT_on == false) {
+        wf_stop = true;
+        if (debug == 1) Serial.println("wifi_stop");
+        //STOP_WF()
+      }
+      else {
+        if (OTA_on) {
+          if (OTA_started == false) {
+            if (debug == 1) Serial.println("OTA is started");
+            // подключаем возможность прошивки по воздуху
+            ArduinoOTA.setHostname("NodeMCU-Kitchen-Light"); // Задаем имя сетевого порта
+            //ArduinoOTA.setPassword((const char *)"0000"); // Задаем пароль доступа для удаленной прошивки
+            ArduinoOTA.begin(); // Инициализируем OTA
+            OTA_started = true;
+          }
+          else {
+            ArduinoOTA.handle(); // ожидание старта прошивки
+          }
+        }
+
+
+      }
+    }
   } // if (!wf_stop)
-#endif  
-  
-  
+#endif
+
+
   // считываем код нажатой кнопки или 0
   if (mySwitch.available())
   {
@@ -267,8 +294,8 @@ void loop() {
       if (btn_value == btn_code) // если код кнопки верный
       {
         // маргнём second_led в качестве подтверждения
-        if (br2 == br_min)  br2 = br_max - 1;
-        else   br2 = br_min + 1;
+        //if (br2 == br_min)  br2 = br_max - 1;
+        //else   br2 = br_min + 1;
 
         btn_block = true; // включаем блокировку кнопки
         btn_timer = millis(); // сбрасываем таймер блокировки
@@ -296,6 +323,10 @@ void loop() {
 
   if (btn_pressed) // Если есть признак нажатия кнопки
   {
+    // маргнём second_led в качестве подтверждения
+    if (br2 == br_min)  br2 = br_max - 1;
+    else   br2 = br_min + 1;
+
     if (led_state == false || br_target == br_half) // включение света
     {
       led_state = true;
@@ -336,7 +367,7 @@ void loop() {
 
     if (sensor_command == true)  // включаем
     {
-      if (debug == 1) Serial.println("sensor_command = " + String(sensor_command));
+      //if (debug == 1) Serial.println("sensor_command = " + String(sensor_command));
 
       br2_target = br_max;
       half_timer_start = millis();
@@ -382,6 +413,7 @@ void loop() {
   br2_step = (float)d_time * (br_max - br_min) / t2_min_max;
   //if (br2 > br_max * 0.8) br2_step = br2_step * 10;
 
+  // расчитываем шаг
   br_step = (float)d_time * (br_max - br_min) / t_min_max;
   if (br < br_half) br_step = br_step / 30;
 
@@ -392,10 +424,9 @@ void loop() {
     if (br < br_target) br = br + br_step;
     else if (br > br_target) br = br - br_step;
     br = constrain(br, br_min, br_max);
-    if (debug == 1) Serial.println("br = " + String(round(br)));
+    //if (debug == 1) Serial.println("br = " + String(round(br)));
 
     analogWrite(main_led_pin, round(br));
-    //yield();
   }
 
   // меняем яркость second_led
@@ -404,39 +435,12 @@ void loop() {
     if (br2 < br2_target) br2 = br2 + br2_step;
     else if (br2 > br2_target) br2 = br2 - br2_step;
     br2 = constrain(br2, br_min, br_max);
-    if (debug == 1) Serial.println("br2 = " + String(round(br2)));
+    //if (debug == 1) Serial.println("br2 = " + String(round(br2)));
 
     analogWrite(second_led_pin, round(br2));
-    //yield();
-
   }
 
 
-
-
-  /*
-    if (millis() - speed_timer >= led_speed)
-    {
-      speed_timer = millis();
-
-      br = change_br(br, br_target);
-      analogWrite(main_led_pin, br); //br_correct(br));
-
-      // br2 = change_br(br2, br2_target);
-      // analogWrite(second_led_pin, br2);
-    }
-
-    if (millis() - speed_timer2 >= second_led_speed)
-    {
-      speed_timer2 = millis();
-
-      //br = change_br(br, br_target);
-      //analogWrite(main_led_pin, br); //br_correct(br));
-
-      br2 = change_br(br2, br2_target);
-      analogWrite(second_led_pin, br2);
-    }
-  */
 
   // управление встроенным светодиодом
   /*
@@ -447,15 +451,15 @@ void loop() {
   */
 
 
-  
+
 
   // nodeMCU ---------------------------
-/*
-  #ifdef nodeMCU
-  if (OTA_on) ArduinoOTA.handle(); // Всегда готовы к прошивке
-  if (MQTT_on) mqtt_call();
-#endif
-*/
+  /*
+    #ifdef nodeMCU
+    if (OTA_on) ArduinoOTA.handle(); // Всегда готовы к прошивке
+    if (MQTT_on) mqtt_call();
+    #endif
+  */
 
 
   d_time = millis() - time_old; // длительность цикла
@@ -467,20 +471,7 @@ void loop() {
 
 // ==========================================================================================
 
-
-float change_br(float brightness, int brightness_target, float brightness_step)
-{
-  //  float brightness_step = 0;
-  //  if (brightness < br_half) brightness_step = (float)br_step / 10;
-  //  else brightness_step = br_step;
-
-  if (brightness < brightness_target) brightness = (float)brightness + brightness_step;
-  if (brightness > brightness_target) brightness = (float)brightness - brightness_step;
-  //constrain(brightness, br_min, br_max);
-  return (brightness);
-}
-
-
+// ФУНКЦИИ
 
 void mqtt_call()
 {
@@ -490,26 +481,32 @@ void mqtt_call()
     mqtt_timer = millis();
     if (!client.connected())
     {
-      //Serial.print("Connecting to MQTT server ");
-      //Serial.print(mqtt_server);
-      //Serial.println("...");
+      if (debug == 1) Serial.print("Connecting to MQTT server ");
+      if (debug == 1) Serial.print(mqtt_server);
+      if (debug == 1) Serial.println("...");
       if (client.connect(MQTT::Connect("arduinoClient2").set_auth(mqtt_user, mqtt_pass)))
       {
-        //Serial.println("Connected to MQTT server ");
+        if (debug == 1) Serial.println("Connected to MQTT server ");
+
         client.set_callback(callback);
         // подписываемся под топики
-        client.subscribe("led_state");
-        client.subscribe("mode_auto");
-        //client.subscribe("br_target");
-        client.subscribe("sensor_command");
-        client.subscribe("low_light");
-        client.subscribe("btn_value");
-        //client.subscribe("vcc");
-        client.subscribe("d_time");
+        /*
+          client.subscribe("led_state");
+          client.subscribe("mode_auto");
+          //client.subscribe("br_target");
+          client.subscribe("sensor_command");
+          client.subscribe("low_light");
+          client.subscribe("btn_value");
+          //client.subscribe("vcc");
+          client.subscribe("d_time");
+        */
+        client.subscribe("OTA_on");
+        client.subscribe("MQTT_on");
+        client.subscribe("btn_pressed");
       }
       else
       {
-        //Serial.println("Could not connect to MQTT server");
+        if (debug == 1) Serial.println("Could not connect to MQTT server");
       }
     }
 
@@ -532,6 +529,7 @@ void refreshData() {
   client.publish("btn_value", String(btn_value));
   //client.publish("vcc", String(ESP.getVcc())); // считаем напряжение на VCC (через пин A0)
   client.publish("d_time", String(d_time));
+  //client.publish("OTA_on", String(OTA_on));
 
   delay(1);
 }
@@ -539,39 +537,22 @@ void refreshData() {
 
 
 // Функция получения данных от сервера
-void callback(const MQTT::Publish& pub)
+void callback(const MQTT::Publish & pub)
 {
   String payload = pub.payload_string();
   String topic = pub.topic();
-
-  //Serial.print(pub.topic()); // выводим в сериал порт название топика
-  //Serial.print(" => ");
-  //Serial.println(payload); // выводим в сериал порт значение полученных данных
-
-
-  // проверяем из нужного ли нам топика пришли данные
-  if (topic == "br_target")
-  {
-    //br_target= payload.toInt();
-
+  if (debug == 1) {
+    Serial.print(pub.topic()); // выводим в сериал порт название топика
+    Serial.print(" => ");
+    Serial.println(payload); // выводим в сериал порт значение полученных данных
   }
 
+  // проверяем из нужного ли нам топика пришли данные
+
+  if (topic == "OTA_on") OTA_on = payload.toInt();
+  if (topic == "MQTT_on") MQTT_on = payload.toInt();
+  if (topic == "btn_pressed") btn_pressed = payload.toInt();
+
+  // if (debug == 1) Serial.println("OTA_on = " + payload); // выводим в сериал порт значение полученных данных
+
 }
-
-
-
-bool try_to_connect_wf(wf_connected)
-{
-
-if (debug==1) {Serial.println("try_to_connect_wf /result="+"xxx")");}
-return(xxx);
-}
-
-/*
-bool try_to_connect_mqtt(mqtt_connected)
-{
-
-if (debug==1) {Serial.println("try_to_connect_mqtt /result="+"xxx")");}
-return(xxx);
-}
-*/
