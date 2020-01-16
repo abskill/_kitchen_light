@@ -1,5 +1,17 @@
 //#define TEST; // раскомментировать для запуска в тестовом режиме
+
+#define NANO; // Закомментировать для NodeMCU
 bool debug = 0; // Serial.print если = 1
+
+#ifdef NANO
+#define main_led_pin 3 // пин управления основной лентой
+#define second_led_pin 6 // пин управления дополнительной лентой
+#define sensor_pin 4 // пин к датчику движения
+#define light_pin 5 // пин к датчику света
+#else
+//...
+#endif
+
 // ----------------------------------
 
 byte br_min = 0; // яркость выключенного состояния
@@ -17,11 +29,6 @@ uint32_t speed_timer = 0; // вспомогательный таймер
 byte second_led_speed = 20; // плавность изменения яркости (чем больше значение, тем плавнее)
 uint32_t speed_timer2 = 0; // вспомогательный таймер
 
-byte main_led_pin = 3; // пин управления основной лентой
-byte second_led_pin = 6; // пин управления дополнительной лентой
-byte sensor_pin = 4; // пин к датчику движения
-byte light_pin = 5; // пин к датчику света
-
 bool cir = 0; // используется в тестовом режиме
 
 byte br = 0;  // текущая яркость
@@ -38,7 +45,10 @@ uint32_t btn_timer = 0; // вспомогательный таймер
 uint32_t btn_delay = 500; // после нажатия на кнопку ее обработка блокируется на это количество миллисекунд
 int btn_value = 0; // значение кода кнопки
 
-bool light_level = 0; // уровень освещенности с датчика света
+bool low_light = true; // уровень освещенности с датчика света
+uint32_t delay_light = 3000; // для исключения обработки дребезга используется это время задержки перехода состояния low_light
+uint32_t timer_light = 0; // вспомогательный таймер
+
 bool sensor_command = 0; // команда с датчика движения
 uint32_t half_timer_start = 0; // вспомогательный таймер
 uint32_t half_delay_on = 10000; // время непрерывного отсутствия команды от датчика движения (мс)
@@ -61,15 +71,16 @@ void setup() {
   pinMode(light_pin, INPUT);
 
 #ifndef TEST
-  if (debug == 1)Serial.println("test mode is off");
+  if (debug == 1) Serial.println("test mode is off");
 
-  for (int i = 0; i < 3; i++ )
+  for (int i = 0; i < 2; i++ )
   {
+    br = 0;
     while (br < 64)
     {
       br++;
       analogWrite(main_led_pin, br); //br_correct(br));
-      analogWrite(second_led_pin, 64 - br);
+      analogWrite(second_led_pin, br);
       delay(5);
     }
 
@@ -77,7 +88,7 @@ void setup() {
     {
       br--;
       analogWrite(main_led_pin, br); //br_correct(br));
-      analogWrite(second_led_pin, 64 - br);
+      analogWrite(second_led_pin, br);
       delay(5);
     }
   }
@@ -202,14 +213,38 @@ void loop() {
   if (mode_auto == true)
   {
     sensor_command = digitalRead(sensor_pin);
-    light_level = digitalRead(light_pin);
+
+    if (digitalRead(light_pin) == low_light)  timer_light = millis();
+    else
+    {
+      if (millis() - timer_light > delay_light)  low_light = ! low_light;
+    }
+
+
+    /*
+      if (low_light == true && digitalRead(light_pin) == true)  timer_light = millis();
+      else
+      {
+      if (millis() - timer_light > delay_light) low_light = false;
+      //else low_light=true;
+      }
+
+      if (low_light == false && digitalRead(light_pin) == false)  timer_light = millis();
+      else
+      {
+      if (millis() - timer_light > delay_light) low_light = true;
+      //else low_light=false;
+      }
+    */
+
+
 
     if (sensor_command == true)  // включаем
     {
       br2_target = br_max;
       half_timer_start = millis();
 
-      if (light_level == true) // если в комнате темно
+      if (low_light == true) // если в комнате темно
       {
         br_target = br_half;
         led_state = true;
@@ -267,8 +302,8 @@ void loop() {
     br = change_br(br, br_target);
     analogWrite(main_led_pin, br); //br_correct(br));
 
-   // br2 = change_br(br2, br2_target);
-   // analogWrite(second_led_pin, br2);
+    // br2 = change_br(br2, br2_target);
+    // analogWrite(second_led_pin, br2);
   }
 
   if (millis() - speed_timer2 >= second_led_speed)
@@ -282,7 +317,7 @@ void loop() {
     analogWrite(second_led_pin, br2);
   }
 
-  
+
   if (led_state == 0) digitalWrite(LED_BUILTIN, LOW);
   else digitalWrite(LED_BUILTIN, HIGH);
 
