@@ -77,6 +77,14 @@ float temp = 0;
 
 //ADC_MODE(ADC_VCC); // A0 будет считытвать значение напряжения VCC
 
+
+uint16_t delay_of_trying_to_connect_wf = 5000;
+uint16_t timer_of_trying_to_connect_wf = millis();
+bool wf_is_connected = false;
+bool mqtt_is_connected = false;
+bool wf_stop = false;
+
+
 #endif
 
 // ----------------------------------
@@ -154,7 +162,8 @@ void setup() {
   delay(500);
 
 #ifdef nodeMCU // Условная компиляция для NodeMCU --------
-
+try_to_connect_wf(wf_is_connected);
+/*
   // включаем wi-fi
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
@@ -168,7 +177,7 @@ void setup() {
   ArduinoOTA.setHostname("ESP8266-00001"); // Задаем имя сетевого порта
   //ArduinoOTA.setPassword((const char *)"0000"); // Задаем пароль доступа для удаленной прошивки
   ArduinoOTA.begin(); // Инициализируем OTA
-
+*/
 #endif // ---------------------------------
 
 
@@ -190,6 +199,45 @@ void setup() {
 
 void loop() {
 
+
+#ifdef nodeMCU
+   if (wf_stop==false) {
+   if (wf_is_connected==false) {
+     if ((millis()-timer_of_trying_to_connect_wf)>delay_of_trying_to_connect_wf) {
+     // try_to_connect_wf(wf_is_connected);
+     WiFi.mode(WIFI_STA);  WiFi.begin(ssid, password);  delay(500);  if (WiFi.waitForConnectResult() != WL_CONNECTED)
+    {
+    wf_is_connected=false;
+    timer_of_trying_to_connect_wf=millis();
+    }
+    else
+    {
+    wf_is_connected=true;
+    }
+      }
+      
+      }
+  
+   if (wf_is_connected==true) {
+   if (MQTT) {
+   mqtt_call();
+   }
+ //  mqtt_read(OTA, MQTT) // прием с сервера
+   if (OTA==flase && MQTT==false) {
+    wf_stop=true;
+    STOP_WF()
+   }
+   else {
+    if (OTA) {
+     ArduinoOTA.handle(); // ожидание старта прошивки
+    }
+   
+    
+   }
+  } // if (!wf_stop)
+#endif  
+  
+  
   // считываем код нажатой кнопки или 0
   if (mySwitch.available())
   {
@@ -398,11 +446,17 @@ void loop() {
     #endif
   */
 
+
+  
+
   // nodeMCU ---------------------------
-#ifdef nodeMCU
+/*
+  #ifdef nodeMCU
   if (OTA_on) ArduinoOTA.handle(); // Всегда готовы к прошивке
   if (MQTT_on) mqtt_call();
 #endif
+*/
+
 
   d_time = millis() - time_old; // длительность цикла
   time_old = millis();
@@ -503,3 +557,21 @@ void callback(const MQTT::Publish& pub)
   }
 
 }
+
+
+
+bool try_to_connect_wf(wf_connected)
+{
+
+if (debug==1) {Serial.println("try_to_connect_wf /result="+"xxx")");}
+return(xxx);
+}
+
+/*
+bool try_to_connect_mqtt(mqtt_connected)
+{
+
+if (debug==1) {Serial.println("try_to_connect_mqtt /result="+"xxx")");}
+return(xxx);
+}
+*/
