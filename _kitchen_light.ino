@@ -1,7 +1,7 @@
 
 
 #define nodeMCU; // Закомментировать, если сборка для NANO
-bool debug = 1; // Serial.print если = 1
+bool debug = 0; // Serial.print если = 1
 
 
 #ifndef nodeMCU // условная компиляция для Nano ----------
@@ -88,6 +88,11 @@ bool OTA_started = false;
 
 byte br_min = 0; // яркость выключенного состояния
 byte br_half = 13; // яркость включения в авто режиме
+float t_half = 500;  //
+float t1 = 0;  //
+float a = 0;
+uint32_t t_max = 2000; // время изменения яркости от br_min до br_max (миллисекунды)
+bool increase = false;
 
 //byte led_speed1 = 20; // плавность изменения яркости (чем больше значение, тем плавнее)
 //byte led_speed2 = 60; // плавность изменения яркости (чем больше значение, тем плавнее)
@@ -116,15 +121,15 @@ int btn_value = 0;  // значение кода кнопки
 
 bool low_light = true;  // уровень освещенности с датчика света (нач.значение)
 
-uint32_t delay_light = 1000;  // для исключения обработки дребезга используется это время задержки перехода состояния low_light
+uint32_t delay_light = 500;  // для исключения обработки дребезга используется это время задержки перехода состояния low_light
 uint32_t timer_light = 0;  // вспомогательный таймер
 
 //uint32_t delay_main_led = 1000;  // задержка включения основной ленты в авто режиме
 
 bool sensor_command = 0;  // начальное значение команды с датчика движения
 
-uint32_t half_delay_on = 25000;  // время непрерывного отсутствия команды от датчика движения (мс) main_led
-uint32_t half_delay_on2 = 30000;  // время непрерывного отсутствия команды от датчика движения (мс) second_led
+uint32_t half_delay_on = 10000;  // время непрерывного отсутствия команды от датчика движения (мс) main_led
+uint32_t half_delay_on2 = 13000;  // время непрерывного отсутствия команды от датчика движения (мс) second_led
 uint32_t half_timer_start = 0;  // вспомогательный таймер
 
 uint32_t d_time = 0;  // длительность одно цикла (исп-ся для расчета br_step)
@@ -163,7 +168,7 @@ void setup() {
 
 #ifdef nodeMCU // Условная компиляция для NodeMCU --------
   // try_to_connect_wf(wf_is_connected);
-  if (debug == 1) Serial.print("try_to_connect_wifi...");
+  if (debug == 1) Serial.print("Connecting to wifi...");
   WiFi.mode(WIFI_STA);  WiFi.begin(ssid, password);  delay(500);  if (WiFi.waitForConnectResult() != WL_CONNECTED)
   {
     if (debug == 1) Serial.println("fail");
@@ -218,7 +223,7 @@ void loop() {
     if (wf_is_connected == false) {
       if ((millis() - timer_of_trying_to_connect_wf) > delay_of_trying_to_connect_wf) {
         // try_to_connect_wf(wf_is_connected);
-        if (debug == 1) Serial.print("try_to_connect_wifi...");
+        if (debug == 1) Serial.print("Connecting to wifi...");
         WiFi.mode(WIFI_STA);  WiFi.begin(ssid, password);  delay(500);  if (WiFi.waitForConnectResult() != WL_CONNECTED)
         {
           if (debug == 1) Serial.println("fail");
@@ -382,9 +387,10 @@ void loop() {
     if (sensor_command == false) // выключаем только после задержки
     {
 
-      if (millis() - half_timer_start > half_delay_on)
+      if (millis() - half_timer_start > half_delay_on && br_target != br_min)
       {
         br_target = br_min;
+        if (debug == 1) Serial.println("br_target (auto) = " + String(br_target));
         //br2_target = br_min;
         led_state = false;
       }
@@ -399,9 +405,11 @@ void loop() {
 
 
     // отложенное включение main_led
-    if (led_state && round(br2) == br_max)
+    if (led_state && round(br2) == br_max && br_target != br_half)
     {
       br_target = br_half;
+      if (debug == 1) Serial.println("br_target (auto) = " + String(br_target));
+
     }
 
   }
@@ -414,17 +422,64 @@ void loop() {
   //if (br2 > br_max * 0.8) br2_step = br2_step * 10;
 
   // расчитываем шаг
-  br_step = (float)d_time * (br_max - br_min) / t_min_max;
-  if (br < br_half) br_step = br_step / 30;
+  // br_step = (float)d_time * (br_max - br_min) / t_min_max;
+  // if (br < br_half) br_step = br_step / 30;
 
+  //-------------------
 
-  // меняем яркость main_led
-  if (round(br) != br_target)
-  {
-    if (br < br_target) br = br + br_step;
-    else if (br > br_target) br = br - br_step;
+  if (round(br) != br_target) {
+
+    if (br < br_target) increase = true;
+    else increase = false;
+
+    if (br < br_half) {                 // формула 1
+      // Считаем текущее значение t
+      t1 = br * t_half / br_half;
+      if (debug == 1) Serial.print("f1: br(cur) = " + String(br));
+      if (debug == 1) Serial.print("  t1(cur) = " + String(t1));
+      if (debug == 1) Serial.print("  d_time = " + String(d_time));
+
+      // Считаем новое значение t
+      if (br < br_target) t1 = t1 + d_time;
+      else t1 = t1 - d_time;
+      if (debug == 1) Serial.print("  t1(new) = " + String(t1));
+
+      // Считаем новое значение br
+      br = t1 * br_half / t_half;
+
+    }
+    else {                             // формула 2
+      // Считаем текущее значение t
+      a = (br_max - br_half) / pow((t_max - t_half), 3);
+      t1 = cbrt ((br - br_half) / a) + t_half;
+      if (debug == 1) Serial.print("f2: br(cur) = " + String(br));
+      if (debug == 1) Serial.print("  t1(cur) = " + String(t1));
+      if (debug == 1) Serial.print("  d_time = " + String(d_time));
+
+      // Считаем новое значение t
+      if (br < br_target) t1 = t1 + d_time;
+      else t1 = t1 - d_time;
+      if (debug == 1) Serial.print("  t1(new) = " + String(t1));
+
+      // Считаем новое значение br
+      br = a * pow((t1 - t_half), 3) + br_half;
+      //br = a * (t1 - t_half) * (t1 - t_half) * (t1 - t_half) + br_half;
+    }
+
+    if (increase == true) br = constrain(br, br_min, br_target);
+    else br = constrain(br, br_target, br_max);
+
+    if (debug == 1) Serial.println("  br(new) = " + String(br));
+    //  }
+    //-------------------
+
+    // меняем яркость main_led
+    //  if (round(br) != br_target)
+    //  {
+    //if (br < br_target) br = br + br_step;
+    //else if (br > br_target) br = br - br_step;
     br = constrain(br, br_min, br_max);
-    //if (debug == 1) Serial.println("br = " + String(round(br)));
+    //if (debug == 1) Serial.println("br = " + String(br));
 
     analogWrite(main_led_pin, round(br));
   }
@@ -522,7 +577,7 @@ void mqtt_call()
 void refreshData() {
   client.publish("led_state", String(led_state));
   client.publish("mode_auto", String(mode_auto));
-//  client.publish("br_target", String(br_target));
+  //  client.publish("br_target", String(br_target));
   client.publish("br", String(br));
   client.publish("sensor_command", String(sensor_command));
   client.publish("low_light", String(low_light));
