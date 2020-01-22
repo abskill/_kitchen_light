@@ -493,7 +493,6 @@ void mqtt_call()
         /*
           client.subscribe("led_state");
           client.subscribe("mode_auto");
-          //client.subscribe("br_target");
           client.subscribe("sensor_command");
           client.subscribe("low_light");
           client.subscribe("btn_value");
@@ -503,6 +502,7 @@ void mqtt_call()
         client.subscribe("OTA_on");
         client.subscribe("MQTT_on");
         client.subscribe("btn_pressed");
+        client.subscribe("br_target");
       }
       else
       {
@@ -522,7 +522,7 @@ void mqtt_call()
 void refreshData() {
   client.publish("led_state", String(led_state));
   client.publish("mode_auto", String(mode_auto));
-  client.publish("br_target", String(br_target));
+//  client.publish("br_target", String(br_target));
   client.publish("br", String(br));
   client.publish("sensor_command", String(sensor_command));
   client.publish("low_light", String(low_light));
@@ -552,6 +552,7 @@ void callback(const MQTT::Publish & pub)
   if (topic == "OTA_on") OTA_on = payload.toInt();
   if (topic == "MQTT_on") MQTT_on = payload.toInt();
   if (topic == "btn_pressed") btn_pressed = payload.toInt();
+  if (topic == "br_target") br_target = payload.toInt();
 
   // if (debug == 1) Serial.println("OTA_on = " + payload); // выводим в сериал порт значение полученных данных
 
