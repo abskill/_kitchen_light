@@ -405,7 +405,7 @@ void loop() {
 
 
     // отложенное включение main_led
-    if (led_state && round(br2) == br_max && br_target != br_half)
+    if ((led_state && (round(br2) == br_max || round(br) > br_half)) && br_target != br_half)
     {
       br_target = br_half;
       if (debug == 1) Serial.println("br_target (auto) = " + String(br_target));
