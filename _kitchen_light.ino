@@ -22,6 +22,8 @@ int br_max = 255; // яркость включения в ручном режи�
 
 bool OTA_on = false;
 bool MQTT_on = true;
+bool WIFI_on = false;
+byte wifi_err_couter = 0;
 /*
   #define main_led_pin D1 // пин управления основной лентой
   #define second_led_pin D3 // пин управления дополнительной лентой
@@ -33,7 +35,7 @@ bool MQTT_on = true;
 #define second_led_pin D6 // пин управления дополнительной лентой
 #define sensor_pin D7 // пин к датчику движения
 #define light_pin D1 // пин к датчику света
-
+//#define LED_BUILTIN 2
 #define btn_code 600258 // код кнопки радиоканала
 
 int br_max = 1023; // яркость включения в ручном режиме
@@ -74,11 +76,10 @@ float temp = 0;
 //ADC_MODE(ADC_VCC); // A0 будет считытвать значение напряжения VCC
 
 
-uint16_t delay_of_trying_to_connect_wf = 5000;
+uint16_t delay_of_trying_to_connect_wf = 60000*10;
 uint16_t timer_of_trying_to_connect_wf = millis();
 bool wf_is_connected = false;
 bool mqtt_is_connected = false;
-bool wf_stop = false;
 //void mqtt_call();
 bool OTA_started = false;
 
@@ -87,7 +88,7 @@ bool OTA_started = false;
 // ----------------------------------
 
 byte br_min = 0; // яркость выключенного состояния
-byte br_half = 13; // яркость включения в авто режиме
+byte br_half = 23; // яркость включения в авто режиме
 float t_half = 500;  //
 float t1 = 0;  //
 float a = 0;
@@ -116,7 +117,7 @@ bool mode_auto = true;  // режим автоматического управ�
 bool btn_block = false;  // блокировка обработкки нажатия кнопки
 uint32_t btn_timer = 0;  // вспомогательный таймер
 
-uint32_t btn_delay = 500;  // после нажатия на кнопку ее обработка блокируется на это количество миллисекунд
+uint32_t btn_delay = 300;  // после нажатия на кнопку ее обработка блокируется на это количество миллисекунд
 int btn_value = 0;  // значение кода кнопки
 
 bool low_light = true;  // уровень освещенности с датчика света (нач.значение)
@@ -128,8 +129,8 @@ uint32_t timer_light = 0;  // вспомогательный таймер
 
 bool sensor_command = 0;  // начальное значение команды с датчика движения
 
-uint32_t half_delay_on = 10000;  // время непрерывного отсутствия команды от датчика движения (мс) main_led
-uint32_t half_delay_on2 = 13000;  // время непрерывного отсутствия команды от датчика движения (мс) second_led
+uint32_t half_delay_on = 30000;  // время непрерывного отсутствия команды от датчика движения (мс) main_led
+uint32_t half_delay_on2 = 35000;  // время непрерывного отсутствия команды от датчика движения (мс) second_led
 uint32_t half_timer_start = 0;  // вспомогательный таймер
 
 uint32_t d_time = 0;  // длительность одно цикла (исп-ся для расчета br_step)
@@ -151,7 +152,7 @@ void setup() {
   // устанавливаем режим пинов
   pinMode(main_led_pin, OUTPUT);
   pinMode(second_led_pin, OUTPUT);
-  //pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
   pinMode(sensor_pin, INPUT);
   pinMode(light_pin, INPUT);
 
@@ -168,20 +169,22 @@ void setup() {
 
 #ifdef nodeMCU // Условная компиляция для NodeMCU --------
   // try_to_connect_wf(wf_is_connected);
-  if (debug == 1) Serial.print("Connecting to wifi...");
-  WiFi.mode(WIFI_STA);  WiFi.begin(ssid, password);  delay(500);  if (WiFi.waitForConnectResult() != WL_CONNECTED)
-  {
-    if (debug == 1) Serial.println("fail");
+  if (WIFI_on) {
+    if (debug == 1) Serial.print("Connecting to wifi...");
+    WiFi.mode(WIFI_STA);  WiFi.begin(ssid, password);  delay(1000);  if (WiFi.waitForConnectResult() != WL_CONNECTED)
+    {
+      if (debug == 1) Serial.println("fail");
 
-    wf_is_connected = false;
-    timer_of_trying_to_connect_wf = millis();
+      wf_is_connected = false;
+      timer_of_trying_to_connect_wf = millis();
+      wifi_err_couter++;
+    }
+    else
+    {
+      if (debug == 1) Serial.println("ok");
+      wf_is_connected = true;
+    }
   }
-  else
-  {
-    if (debug == 1) Serial.println("ok");
-    wf_is_connected = true;
-  }
-
   /*
     // включаем wi-fi
     WiFi.mode(WIFI_STA);
@@ -219,22 +222,25 @@ void loop() {
 
 
 #ifdef nodeMCU
-  if (wf_stop == false) {
+  if (WIFI_on) {
     if (wf_is_connected == false) {
-      if ((millis() - timer_of_trying_to_connect_wf) > delay_of_trying_to_connect_wf) {
+      if (wifi_err_couter < 5 && (millis() - timer_of_trying_to_connect_wf) > delay_of_trying_to_connect_wf) {
         // try_to_connect_wf(wf_is_connected);
         if (debug == 1) Serial.print("Connecting to wifi...");
-        WiFi.mode(WIFI_STA);  WiFi.begin(ssid, password);  delay(500);  if (WiFi.waitForConnectResult() != WL_CONNECTED)
+        //digitalWrite(LED_BUILTIN, HIGH);
+        WiFi.mode(WIFI_STA);  WiFi.begin(ssid, password);  delay(1000);  if (WiFi.waitForConnectResult() != WL_CONNECTED)
         {
           if (debug == 1) Serial.println("fail");
           wf_is_connected = false;
           timer_of_trying_to_connect_wf = millis();
+          wifi_err_couter++;
         }
         else
         {
           if (debug == 1) Serial.println("ok");
           wf_is_connected = true;
         }
+        //digitalWrite(LED_BUILTIN, LOW);
       }
 
     }
@@ -244,7 +250,7 @@ void loop() {
 
 
       if (OTA_on == false && MQTT_on == false) {
-        wf_stop = true;
+        WIFI_on = false;
         if (debug == 1) Serial.println("wifi_stop");
         //STOP_WF()
       }
@@ -266,7 +272,8 @@ void loop() {
 
       }
     }
-  } // if (!wf_stop)
+  } // if (WIFI_on)
+  else delay(1);
 #endif
 
 
@@ -434,24 +441,24 @@ void loop() {
 
     if (br < br_half) {                 // формула 1
       // Считаем текущее значение t
-      t1 = br * t_half / br_half;
+      t1 = (float)br * t_half / br_half;
       if (debug == 1) Serial.print("f1: br(cur) = " + String(br));
       if (debug == 1) Serial.print("  t1(cur) = " + String(t1));
       if (debug == 1) Serial.print("  d_time = " + String(d_time));
 
       // Считаем новое значение t
-      if (br < br_target) t1 = t1 + d_time;
-      else t1 = t1 - d_time;
+      if (br < br_target) t1 = (float)t1 + d_time;
+      else t1 = (float)t1 - d_time;
       if (debug == 1) Serial.print("  t1(new) = " + String(t1));
 
       // Считаем новое значение br
-      br = t1 * br_half / t_half;
+      br = (float)t1 * br_half / t_half;
 
     }
     else {                             // формула 2
       // Считаем текущее значение t
-      a = (br_max - br_half) / pow((t_max - t_half), 3);
-      t1 = cbrt ((br - br_half) / a) + t_half;
+      a = (float)(br_max - br_half) / pow((t_max - t_half), 3);
+      t1 = (float)cbrt ((br - br_half) / a) + t_half;
       if (debug == 1) Serial.print("f2: br(cur) = " + String(br));
       if (debug == 1) Serial.print("  t1(cur) = " + String(t1));
       if (debug == 1) Serial.print("  d_time = " + String(d_time));
@@ -462,8 +469,8 @@ void loop() {
       if (debug == 1) Serial.print("  t1(new) = " + String(t1));
 
       // Считаем новое значение br
-      br = a * pow((t1 - t_half), 3) + br_half;
-      //br = a * (t1 - t_half) * (t1 - t_half) * (t1 - t_half) + br_half;
+      br = (float)a * pow((t1 - t_half), 3) + br_half;
+      //br = (float)a * (t1 - t_half) * (t1 - t_half) * (t1 - t_half) + br_half;
     }
 
     if (increase == true) br = constrain(br, br_min, br_target);
@@ -518,6 +525,7 @@ void loop() {
 
 
   d_time = millis() - time_old; // длительность цикла
+  //if (d_time < 1.00) d_time = 1.00;
   time_old = millis();
 
 } // end loop
