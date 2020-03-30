@@ -76,8 +76,8 @@ float temp = 0;
 //ADC_MODE(ADC_VCC); // A0 будет считытвать значение напряжения VCC
 
 
-uint16_t delay_of_trying_to_connect_wf = 60000*10;
-uint16_t timer_of_trying_to_connect_wf = millis();
+uint32_t delay_of_trying_to_connect_wf = 60000*10;
+uint32_t timer_of_trying_to_connect_wf = millis();
 bool wf_is_connected = false;
 bool mqtt_is_connected = false;
 //void mqtt_call();
