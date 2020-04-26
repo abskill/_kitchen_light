@@ -4,6 +4,8 @@
 bool debug = 0; // Serial.print если = 1
 
 
+
+
 #ifndef nodeMCU // условная компиляция для Nano ----------
 
 #define main_led_pin 3 // пин управления основной лентой
@@ -14,22 +16,15 @@ bool debug = 0; // Serial.print если = 1
 #define btn_code 10434 // код кнопки радиоканала
 
 int br_max = 255; // яркость включения в ручном режиме
-//byte led_speed1 = 20; // плавность изменения яркости (чем больше значение, тем плавнее)
-//byte led_speed2 = 60; // плавность изменения яркости (чем больше значение, тем плавнее)
-//byte second_led_speed = 20; // плавность изменения яркости (чем больше значение, тем плавнее)
+
+
 
 #else // Условная компиляция для NodeMCU -----------------
 
 bool OTA_on = false;
 bool MQTT_on = true;
-bool WIFI_on = false;
+bool WIFI_on = true;
 byte wifi_err_couter = 0;
-/*
-  #define main_led_pin D1 // пин управления основной лентой
-  #define second_led_pin D3 // пин управления дополнительной лентой
-  #define sensor_pin D4 // пин к датчику движения
-  #define light_pin D0 // пин к датчику света
-*/
 
 #define main_led_pin D5 //D8 //D4 //D5 // пин управления основной лентой
 #define second_led_pin D6 // пин управления дополнительной лентой
@@ -47,8 +42,9 @@ uint32_t t2_min_max = 1700; // время изменения яркости от
 float br2_step = 1; // начальное значение шага изменения яркости
 
 
-uint32_t mqtt_timer = 0; // вспомогательный таймер
 uint32_t mqtt_delay = 500; // интервал обмена с MQTT сервером
+uint32_t mqtt_timer = 0; // вспомогательный таймер
+
 
 #include <ESP8266WiFi.h> //Библиотека для работы с WIFI 
 #include <ESP8266mDNS.h>
@@ -59,24 +55,25 @@ uint32_t mqtt_delay = 500; // интервал обмена с MQTT сервер
 const char* ssid = "EnergaiZer"; //Имя точки доступа WIFI
 const char* password = "ferromed"; //пароль точки доступа WIFI
 
+
 #include <PubSubClient.h>
 const char *mqtt_server = "m21.cloudmqtt.com"; // Имя сервера MQTT
 const int mqtt_port = 16195; // Порт для подключения к серверу MQTT
 const char *mqtt_user = "jrthidnj"; // Логи для подключения к серверу MQTT
 const char *mqtt_pass = "5ZYKoip4ef_S"; // Пароль для подключения к серверу MQTT
+const char *mqtt_unique_client_id = "arduinoClient_KitchenLight";
 
 #define BUFFER_SIZE 100
-
 WiFiClient wclient;
 PubSubClient client(wclient, mqtt_server, mqtt_port);
-
 int tm = 300;
 float temp = 0;
+
 
 //ADC_MODE(ADC_VCC); // A0 будет считытвать значение напряжения VCC
 
 
-uint32_t delay_of_trying_to_connect_wf = 60000*10;
+uint32_t delay_of_trying_to_connect_wf = 60000 * 10;
 uint32_t timer_of_trying_to_connect_wf = millis();
 bool wf_is_connected = false;
 bool mqtt_is_connected = false;
@@ -87,6 +84,8 @@ bool OTA_started = false;
 
 // ----------------------------------
 
+
+
 byte br_min = 0; // яркость выключенного состояния
 byte br_half = 23; // яркость включения в авто режиме
 float t_half = 500;  //
@@ -95,21 +94,11 @@ float a = 0;
 uint32_t t_max = 2000; // время изменения яркости от br_min до br_max (миллисекунды)
 bool increase = false;
 
-//byte led_speed1 = 20; // плавность изменения яркости (чем больше значение, тем плавнее)
-//byte led_speed2 = 60; // плавность изменения яркости (чем больше значение, тем плавнее)
-//byte led_speed = led_speed1; // плавность изменения яркости (чем больше значение, тем плавнее)
-//uint32_t speed_timer = 0; // вспомогательный таймер
-
-//byte second_led_speed = 20; // плавность изменения яркости (чем больше значение, тем плавнее)
-//uint32_t speed_timer2 = 0; // вспомогательный таймер
-
-//bool cir = 0; // используется в тестовом режиме
-
-float br = 0;  // текущая яркость
+float br = 0;  // текущая яркость основсной ленты
 int br_target = 0;  // назначенная яркость
-bool led_state = false; // статус ленты (вкл/выкл)
+bool led_state = false; // статус основной ленты (вкл/выкл)
 
-float br2 = 0;  // текущая яркость
+float br2 = 0;  // текущая яркость дополнительной ленты
 int br2_target = 0;  // назначенная яркость
 
 bool btn_pressed = false;  // признак нажатия кнопки
@@ -125,15 +114,13 @@ bool low_light = true;  // уровень освещенности с датчи
 uint32_t delay_light = 500;  // для исключения обработки дребезга используется это время задержки перехода состояния low_light
 uint32_t timer_light = 0;  // вспомогательный таймер
 
-//uint32_t delay_main_led = 1000;  // задержка включения основной ленты в авто режиме
-
 bool sensor_command = 0;  // начальное значение команды с датчика движения
 
-uint32_t half_delay_on = 30000;  // время непрерывного отсутствия команды от датчика движения (мс) main_led
-uint32_t half_delay_on2 = 35000;  // время непрерывного отсутствия команды от датчика движения (мс) second_led
+uint32_t half_delay_on = 60000;  // время непрерывного отсутствия команды от датчика движения (мс) main_led
+uint32_t half_delay_on2 = 70000;  // время непрерывного отсутствия команды от датчика движения (мс) second_led
 uint32_t half_timer_start = 0;  // вспомогательный таймер
 
-uint32_t d_time = 0;  // длительность одно цикла (исп-ся для расчета br_step)
+uint32_t d_time = 0;  // длительность одного цикла (исп-ся для расчета br_step)
 uint32_t time_old = millis();
 
 // ----------------------------------
@@ -142,8 +129,6 @@ uint32_t time_old = millis();
 RCSwitch mySwitch = RCSwitch();
 
 // ==========================================================================================
-// the setup routine runs once when you press reset:
-
 void setup() {
 
   // initialize serial communication at 9600 bits per second:
@@ -167,7 +152,11 @@ void setup() {
   analogWrite(second_led_pin, br_min);
   delay(500);
 
+
+
+
 #ifdef nodeMCU // Условная компиляция для NodeMCU --------
+
   // try_to_connect_wf(wf_is_connected);
   if (WIFI_on) {
     if (debug == 1) Serial.print("Connecting to wifi...");
@@ -259,7 +248,7 @@ void loop() {
           if (OTA_started == false) {
             if (debug == 1) Serial.println("OTA is started");
             // подключаем возможность прошивки по воздуху
-            ArduinoOTA.setHostname("NodeMCU-Kitchen-Light"); // Задаем имя сетевого порта
+            ArduinoOTA.setHostname("OTA_NodeMCU_KitchenLight"); // Задаем имя сетевого порта
             //ArduinoOTA.setPassword((const char *)"0000"); // Задаем пароль доступа для удаленной прошивки
             ArduinoOTA.begin(); // Инициализируем OTA
             OTA_started = true;
@@ -268,13 +257,12 @@ void loop() {
             ArduinoOTA.handle(); // ожидание старта прошивки
           }
         }
-
-
       }
     }
   } // if (WIFI_on)
   else delay(1);
 #endif
+
 
 
   // считываем код нажатой кнопки или 0
@@ -547,7 +535,7 @@ void mqtt_call()
       if (debug == 1) Serial.print("Connecting to MQTT server ");
       if (debug == 1) Serial.print(mqtt_server);
       if (debug == 1) Serial.println("...");
-      if (client.connect(MQTT::Connect("arduinoClient2").set_auth(mqtt_user, mqtt_pass)))
+      if (client.connect(MQTT::Connect(mqtt_unique_client_id).set_auth(mqtt_user, mqtt_pass)))
       {
         if (debug == 1) Serial.println("Connected to MQTT server ");
 
